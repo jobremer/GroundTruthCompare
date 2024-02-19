@@ -1,0 +1,7 @@
+Messstelle,OTCamera,section_id,road_user_type,Date,Time,OTAnalytics_0,OTGroundTruth,Differenz,Diff [%]
+C2,otcamera28,11,pedestrian,2023-09-19,17-00-00,15,13,-2,-15.4
+C2,otcamera28,11,pedestrian,2023-09-20,07-00-00,30,1,-29,-2900.0
+C2,otcamera28,11,pedestrian,2023-09-20,13-00-00,34,11,-23,-209.1
+C2,otcamera28,12,pedestrian,2023-09-19,17-00-00,11,13,2,15.4
+C2,otcamera28,12,pedestrian,2023-09-20,07-00-00,27,1,-26,-2600.0
+C2,otcamera28,12,pedestrian,2023-09-20,13-00-00,31,11,-20,-181.8
