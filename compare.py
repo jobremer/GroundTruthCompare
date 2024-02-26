@@ -22,6 +22,14 @@ def events_to_df(filepath, key = 'event_list'):
     EVENTS = pd.DataFrame.from_dict(dictfile[key])
     return EVENTS
 
+def sections_to_df(filepath, key = 'sections'):
+    # Open otevents-file
+    with bz2.open(filepath, "rt", encoding="UTF-8") as file:
+        dictfile = ujson.load(file)
+    # Convert to DataFrame
+    SECTIONS = pd.DataFrame.from_dict(dictfile[key])
+    return SECTIONS
+
 # Import
 # GroundTruth
 GT_events = pd.DataFrame()
@@ -30,36 +38,68 @@ for root, dirs, files in tqdm(os.walk(directory)):
     for file in files:
         if file.endswith('.otgtevents'):
             path = os.path.join(root, file)
-            GT_eventfile = events_to_df(path)
+            Stelle = pathlib.PurePath(path).parent.parent.name
+            GT_eventfile = pd.DataFrame(events_to_df(path))
             GT_eventfile['File'] = file
+            GT_eventfile['Messstelle'] = Stelle
+     
+            # Merge Section names to Events (not working)
+            # GT_Sections = sections_to_df(path)
+            # GT_eventfile = pd.merge(GT_eventfile, GT_Sections, how='left', left_on='id', right_on='id')
+            
             GT_events = pd.concat([GT_events, GT_eventfile])
+
         if file.endswith('.otevents'):
             path = os.path.join(root, file)
+            Stelle = pathlib.PurePath(path).parent.parent.name
             OTA_eventfile = events_to_df(path)
             OTA_eventfile['File'] = file
+            OTA_eventfile['Messstelle'] = Stelle
             OTA_events = pd.concat([OTA_events, OTA_eventfile])
-
-
-print(OTA_events['File'].str.split(pat='_', expand=True))
-
+            
 # Split File Cloumn
 OTA_events[['OTCamera', 'fps', 'Date', 'Time', 'Tail']] = OTA_events['File'].str.split(pat='_', expand=True)
 GT_events[['OTCamera', 'fps', 'Date', 'Time', 'Tail']] = GT_events['File'].str.split(pat='_', expand=True)
-# OTA_events[['OTCamera', 'fps', 'Date', 'Time', 'Tail2']] = OTA_events['video_name'].str.split(pat='_', expand=True)
-print(OTA_events.head(2))
-# # print(GT_events.head(0))
-# # print(OTA_events.head(0))
-# del GT_events['File'], GT_events['fps'], GT_events['Tail'], OTA_events['File'],  OTA_events['Ausrichtung'], OTA_events['fps'], OTA_events['Tail']
 
-# Auswertung
-OTACounts = pd.DataFrame(OTA_events.groupby(['OTCamera', 'section_id', 'road_user_type', 'Date', 'Time'])['road_user_id'].count()).reset_index().rename(columns = {'index': 'classes','road_user_id': 'OTAnalytics_0'})
-GTCounts = pd.DataFrame(GT_events.groupby(['OTCamera', 'section_id', 'road_user_type', 'Date', 'Time'])['road_user_id'].count()).reset_index().rename(columns = {'index': 'classes','road_user_id': 'OTGroundTruth'})
+# OTA-Events: Only events that cut two sections
+OTA_events = OTA_events[OTA_events['event_type'] == 'section-enter']
 
-Counts = pd.merge(OTACounts, GTCounts, left_on=['Date', 'Time', 'section_id', 'road_user_type', 'OTCamera'], right_on = ['Date', 'Time', 'section_id', 'road_user_type', 'OTCamera'])
+OTA_events['road_user_id2'] = OTA_events['Messstelle'] + OTA_events['section_id'] + '_' + OTA_events['Time'] + '_' + OTA_events['road_user_id']
+flow = OTA_events[['Messstelle', 'section_id', 'Time', 'road_user_id', 'road_user_id2']].drop_duplicates('road_user_id2')
+flow = flow.reset_index(drop=True)
+
+
+
+sections = pd.DataFrame(flow.groupby(['Messstelle', 'Time', 'road_user_id'])['section_id'].unique())
+sections = sections.rename(columns={'section_id': 'sections'})
+sections[['section_1', 'section_2']] = pd.DataFrame(sections['sections'].tolist(), index=sections.index)
+# sections.to_csv('sections.csv', sep=';')
+
+flow = pd.merge(flow, sections, on=['Messstelle', 'Time', 'road_user_id'])
+# flow.to_csv('flow.csv', sep=';')
+
+del flow['road_user_id2']
+
+OTA_events = pd.merge(OTA_events, flow, how='left', on=['Messstelle', 'Time', 'road_user_id', 'section_id'])
+print(OTA_events.head(30))
+# print(len(OTA_events))
+# OTA_events.to_csv('otaevents.csv', sep=';')
+# OTA_events.groupby(['road_user_id', 'section_1', 'section_2'])['fps'].count().to_csv('test.csv', sep=';')
+
+
+# flow = flow.pivot(index='road_user_id2', columns='section_id', values='frame_number')
+# print(flow)
+
+# Counts
+OTACounts = pd.DataFrame(OTA_events.groupby(['Messstelle', 'OTCamera', 'section_id', 'road_user_type', 'Date', 'Time'])['road_user_id'].count()).reset_index().rename(columns = {'index': 'classes','road_user_id': 'OTAnalytics_0'})
+GTCounts = pd.DataFrame(GT_events.groupby(['Messstelle', 'OTCamera', 'section_id', 'road_user_type', 'Date', 'Time'])['road_user_id'].count()).reset_index().rename(columns = {'index': 'classes','road_user_id': 'OTGroundTruth'})
+
+mergecols = ['Messstelle', 'Date', 'Time', 'section_id', 'road_user_type', 'OTCamera']
+Counts = pd.merge(OTACounts, GTCounts, left_on = mergecols, right_on = mergecols)
 Counts['Differenz'] = Counts['OTGroundTruth'] - Counts['OTAnalytics_0']
 Counts['Diff [%]'] = np.round((1 - np.round(Counts['OTAnalytics_0'] / Counts['OTGroundTruth'], 3)) * 100, 1)
 
-print(Counts)
 
-Counts.to_csv('Compare.csv', index=False)
 
+
+Counts.to_csv(directory + 'Compare_GroundTruth.csv', sep=';', index=False)
