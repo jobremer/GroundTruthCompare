@@ -81,14 +81,15 @@ flow = pd.merge(flow, sections, on=['Messstelle', 'Time', 'road_user_id'])
 del flow['road_user_id2']
 
 OTA_events = pd.merge(OTA_events, flow, how='left', on=['Messstelle', 'Time', 'road_user_id', 'section_id'])
-print(OTA_events.head(30))
-# print(len(OTA_events))
-# OTA_events.to_csv('otaevents.csv', sep=';')
-# OTA_events.groupby(['road_user_id', 'section_1', 'section_2'])['fps'].count().to_csv('test.csv', sep=';')
 
 
-# flow = flow.pivot(index='road_user_id2', columns='section_id', values='frame_number')
-# print(flow)
+
+
+OTA_events[['section_1', 'section_2']] = OTA_events[['section_1', 'section_2']].replace({None: np.NaN})
+OTA_events = OTA_events.dropna(subset=['section_1','section_2'])
+
+OTA_events.to_csv('otaevents.csv', sep=';')
+GT_events.to_csv('gtevents.csv', sep=';')
 
 # Counts
 OTACounts = pd.DataFrame(OTA_events.groupby(['Messstelle', 'OTCamera', 'section_id', 'road_user_type', 'Date', 'Time'])['road_user_id'].count()).reset_index().rename(columns = {'index': 'classes','road_user_id': 'OTAnalytics_0'})
@@ -103,3 +104,4 @@ Counts['Diff [%]'] = np.round((1 - np.round(Counts['OTAnalytics_0'] / Counts['OT
 
 
 Counts.to_csv(directory + 'Compare_GroundTruth.csv', sep=';', index=False)
+print(Counts)
