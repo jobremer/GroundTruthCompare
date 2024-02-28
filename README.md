@@ -1,1 +1,0 @@
-Script to compare the events from OTAnalytics to the Events from OTGroundTruther
